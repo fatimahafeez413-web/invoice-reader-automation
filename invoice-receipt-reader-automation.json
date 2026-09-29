@@ -1,0 +1,271 @@
+{
+  "name": "invoice-receipt-reader-automation",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "1us-4ot2A82TNsATQ0I9Cyo4JfyfWxhaj",
+          "mode": "list",
+          "cachedResultName": "Invoices",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1us-4ot2A82TNsATQ0I9Cyo4JfyfWxhaj"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "99b09a59-3c24-40ab-8e91-492463d76dda",
+      "name": "Google Drive Trigger",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "rrwbci1wwDnFRmDd",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Google Drive Trigger').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "962a02fb-9d4c-4e1c-815d-5a274e0ae05d",
+      "name": "Download file",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "rrwbci1wwDnFRmDd",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const buffer = await this.helpers.getBinaryDataBuffer(0, \"data\");\nreturn [{ json: { base64: buffer.toString(\"base64\") } }];"
+      },
+      "id": "4108defd-01f1-4147-9463-183b416f85a4",
+      "name": "To Base64",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "   https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"text\": \"Extract the following fields from this invoice: vendor name, date, invoice number, line items, subtotal, tax, and total amount. Return ONLY valid JSON with these exact keys: vendor, date, invoice_number, items, subtotal, tax, total. Do not add any explanation or markdown formatting, just the raw JSON.\"\n        },\n        {\n          \"inline_data\": {\n            \"mime_type\": \"application/pdf\",\n            \"data\": \"{{ $json.base64 }}\"\n          }\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "d394348d-5213-46f4-82f8-2e9db061cc52",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        432,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BpJNjneSK4tKxJWp",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1S5o4SG2tVftnn4TQtBGe4-wuzeAQy_k5bNdO4efjcd0",
+          "mode": "list",
+          "cachedResultName": "Invoice Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5o4SG2tVftnn4TQtBGe4-wuzeAQy_k5bNdO4efjcd0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1S5o4SG2tVftnn4TQtBGe4-wuzeAQy_k5bNdO4efjcd0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Vendor": "={{ JSON.parse($json.candidates[0].content.parts[0].text.replace(/```json|```/g, '')).vendor }}",
+            "Date": "={{ JSON.parse($json.candidates[0].content.parts[0].text.replace(/```json|```/g, '')).date }}",
+            "Invoice Number": "={{ JSON.parse($json.candidates[0].content.parts[0].text.replace(/```json|```/g, '')).invoice_number }}",
+            "Subtotal": "={{ JSON.parse($json.candidates[0].content.parts[0].text.replace(/```json|```/g, '')).subtotal }}",
+            "Tax": "={{ JSON.parse($json.candidates[0].content.parts[0].text.replace(/```json|```/g, '')).tax }}",
+            "Total": "={{ JSON.parse($json.candidates[0].content.parts[0].text.replace(/```json|```/g, '')).total }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Vendor",
+              "displayName": "Vendor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Invoice Number",
+              "displayName": "Invoice Number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Subtotal",
+              "displayName": "Subtotal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tax",
+              "displayName": "Tax",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Total",
+              "displayName": "Total",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        656,
+        16
+      ],
+      "id": "735cde06-812b-46c4-b659-4975945277d4",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "vq8A1YVkuWIXezN4",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Drive Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "To Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "To Base64": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "7ae7d185-aee1-4038-ae11-55ddb9bb1520",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "29da7b2fe4745412fb7c023fa8ed088524a97150147a955914371b6f546eded9"
+  },
+  "nodeGroups": [],
+  "id": "HLflQ2XuiBzEqSVh",
+  "tags": []
+}
